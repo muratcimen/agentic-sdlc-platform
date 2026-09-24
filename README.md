@@ -72,3 +72,17 @@ Configured project roots can be inspected with:
 ```bash
 curl http://127.0.0.1:8080/projects
 ```
+
+## Wiki workflow
+
+The implementation wiki is under `docs/wiki/`. Agents should copy
+`docs/wiki/templates/task.md` for a task, update its status and evidence in the
+same change as the implementation, and add repository-relative evidence paths.
+Use `docs/wiki/templates/decision.md` for durable architectural decisions.
+
+Validate task headings, statuses, evidence paths, and completed-task test and
+commit/PR records with:
+
+```bash
+python3 scripts/validate_wiki.py
+```
