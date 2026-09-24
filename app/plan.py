@@ -4,8 +4,10 @@ import argparse
 import json
 import os
 import re
+import uuid
 import urllib.request
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -175,6 +177,9 @@ def main() -> None:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     args = parser.parse_args()
     plan = create_plan(args.request, args.repository.resolve(), args.model)
+    plan["runId"] = str(uuid.uuid4())
+    plan["createdAt"] = datetime.now(timezone.utc).isoformat()
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps(plan, indent=2, ensure_ascii=False))
     print(f"\nSaved read-only plan to {args.output}", flush=True)

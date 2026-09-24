@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -24,13 +25,14 @@ class ServerTests(unittest.TestCase):
     def test_plan_endpoint_is_read_only(self):
         with tempfile.TemporaryDirectory() as directory:
             repository = Path(directory)
+            plans = repository / "plans"
             source = repository / "AccountService.java"
             source.write_text("class AccountService {}")
             connection = HTTPConnection("127.0.0.1", self.server.server_port)
             body = json.dumps(
                 {"repository": str(repository), "request": "Plan account changes"}
             )
-            with patch(
+            with patch.dict(os.environ, {"PLANS_DIR": str(plans)}), patch(
                 "app.server.create_plan",
                 return_value={
                     "mode": "plan-only",
@@ -46,6 +48,9 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(200, response.status)
             self.assertEqual("plan-only", payload["mode"])
             self.assertTrue(payload["humanApprovalRequired"])
+            self.assertRegex(payload["runId"], r"^[0-9a-f-]{36}$")
+            self.assertTrue(payload["createdAt"].endswith("+00:00"))
+            self.assertTrue((plans / f"{payload['runId']}.json").exists())
             self.assertEqual("class AccountService {}", source.read_text())
 
     def test_unknown_endpoint_returns_not_found(self):

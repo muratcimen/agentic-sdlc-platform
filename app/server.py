@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.request import urlopen
@@ -49,6 +51,14 @@ class PlanHandler(BaseHTTPRequestHandler):
             model = payload.get("model", "qwen2.5-coder:1.5b")
             endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
             plan = create_plan(request, repository, model, endpoint)
+            plan["runId"] = str(uuid.uuid4())
+            plan["createdAt"] = datetime.now(timezone.utc).isoformat()
+            plans_dir = Path(os.environ.get("PLANS_DIR", "plans"))
+            plans_dir.mkdir(parents=True, exist_ok=True)
+            (plans_dir / f"{plan['runId']}.json").write_text(
+                json.dumps(plan, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
             self._send(200, plan)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
             self._send(400, {"error": str(error)})
