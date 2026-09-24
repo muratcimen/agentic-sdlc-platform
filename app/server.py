@@ -15,6 +15,9 @@ MAX_REQUEST_BYTES = 64 * 1024
 
 
 class PlanHandler(BaseHTTPRequestHandler):
+    def _plans_directory(self) -> Path:
+        return Path(os.environ.get("PLANS_DIR", "plans"))
+
     def _send(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode()
         self.send_response(status)
@@ -32,6 +35,41 @@ class PlanHandler(BaseHTTPRequestHandler):
                 self._send(200, {"status": "ok", "ollama": ollama})
             except OSError as error:
                 self._send(503, {"status": "degraded", "ollama": str(error)})
+            return
+        if self.path == "/plans":
+            plans = []
+            for path in sorted(
+                self._plans_directory().glob("*.json"),
+                key=lambda item: item.stat().st_mtime,
+                reverse=True,
+            ):
+                try:
+                    plan = json.loads(path.read_text(encoding="utf-8"))
+                    plans.append(
+                        {
+                            "runId": plan["runId"],
+                            "createdAt": plan["createdAt"],
+                            "request": plan.get("request", ""),
+                            "mode": plan.get("mode", "plan-only"),
+                        }
+                    )
+                except (OSError, KeyError, TypeError, json.JSONDecodeError):
+                    continue
+            self._send(200, {"plans": plans})
+            return
+        if self.path.startswith("/plans/"):
+            run_id = self.path.removeprefix("/plans/")
+            if "/" in run_id or not run_id:
+                self._send(400, {"error": "Invalid runId"})
+                return
+            plan_path = self._plans_directory() / f"{run_id}.json"
+            try:
+                plan = json.loads(plan_path.read_text(encoding="utf-8"))
+                self._send(200, plan)
+            except FileNotFoundError:
+                self._send(404, {"error": "Plan not found"})
+            except (OSError, TypeError, json.JSONDecodeError) as error:
+                self._send(500, {"error": str(error)})
             return
         self._send(404, {"error": "Not found"})
 
@@ -53,7 +91,7 @@ class PlanHandler(BaseHTTPRequestHandler):
             plan = create_plan(request, repository, model, endpoint)
             plan["runId"] = str(uuid.uuid4())
             plan["createdAt"] = datetime.now(timezone.utc).isoformat()
-            plans_dir = Path(os.environ.get("PLANS_DIR", "plans"))
+            plans_dir = self._plans_directory()
             plans_dir.mkdir(parents=True, exist_ok=True)
             (plans_dir / f"{plan['runId']}.json").write_text(
                 json.dumps(plan, indent=2, ensure_ascii=False) + "\n",

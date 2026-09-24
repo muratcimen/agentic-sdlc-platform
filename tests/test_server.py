@@ -58,6 +58,32 @@ class ServerTests(unittest.TestCase):
         connection.request("GET", "/unknown")
         self.assertEqual(404, connection.getresponse().status)
 
+    def test_saved_plans_can_be_listed_and_read(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"PLANS_DIR": directory}
+        ):
+            saved = Path(directory) / "abc.json"
+            saved.write_text(
+                json.dumps(
+                    {
+                        "runId": "abc",
+                        "createdAt": "2026-01-01T00:00:00+00:00",
+                        "request": "test",
+                        "mode": "plan-only",
+                    }
+                )
+            )
+            connection = HTTPConnection("127.0.0.1", self.server.server_port)
+            connection.request("GET", "/plans")
+            response = connection.getresponse()
+            self.assertEqual(200, response.status)
+            self.assertEqual("abc", json.loads(response.read())["plans"][0]["runId"])
+
+            connection.request("GET", "/plans/abc")
+            response = connection.getresponse()
+            self.assertEqual(200, response.status)
+            self.assertEqual("abc", json.loads(response.read())["runId"])
+
     def test_plan_endpoint_rejects_empty_request(self):
         connection = HTTPConnection("127.0.0.1", self.server.server_port)
         connection.request(

@@ -50,3 +50,10 @@ implemented in this phase.
 Each API plan receives a UUID `runId` and UTC `createdAt` timestamp. The
 result is persisted under `plans/` in the platform repository (or `PLANS_DIR`)
 for later evaluation and audit. `plans/` is ignored by Git.
+
+Saved plans can be inspected without accessing StreamBank:
+
+```bash
+curl http://127.0.0.1:8080/plans
+curl http://127.0.0.1:8080/plans/<runId>
+```
