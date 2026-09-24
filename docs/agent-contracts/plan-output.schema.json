@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent plan output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "acceptanceCriteria",
+    "domains",
+    "filesToInspect",
+    "proposedChanges",
+    "riskLevel",
+    "requiresHumanApproval"
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "description", "testable"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^AC-[0-9]{3}$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "testable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "filesToInspect": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "proposedChanges": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "riskLevel": {
+      "type": "string",
+      "enum": ["LOW", "MEDIUM", "HIGH"]
+    },
+    "requiresHumanApproval": {
+      "const": true
+    }
+  }
+}
