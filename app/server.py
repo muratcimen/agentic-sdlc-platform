@@ -18,6 +18,17 @@ class PlanHandler(BaseHTTPRequestHandler):
     def _plans_directory(self) -> Path:
         return Path(os.environ.get("PLANS_DIR", "plans"))
 
+    def _allowed_repository(self, requested: Path) -> Path:
+        allowed = os.environ.get("STREAMBANK_PATH")
+        if not allowed:
+            return requested
+        root = Path(allowed).expanduser().resolve()
+        try:
+            requested.relative_to(root)
+        except ValueError as error:
+            raise ValueError("repository is outside the configured StreamBank path") from error
+        return requested
+
     def _send(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode()
         self.send_response(status)
@@ -83,7 +94,9 @@ class PlanHandler(BaseHTTPRequestHandler):
                 raise ValueError("Request body must be between 1 and 65536 bytes")
             payload = json.loads(self.rfile.read(length))
             request = payload["request"]
-            repository = Path(payload["repository"]).expanduser().resolve()
+            repository = self._allowed_repository(
+                Path(payload["repository"]).expanduser().resolve()
+            )
             if not isinstance(request, str) or not request.strip():
                 raise ValueError("request must be a non-empty string")
             model = payload.get("model", "qwen2.5-coder:1.5b")

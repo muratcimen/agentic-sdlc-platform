@@ -95,6 +95,19 @@ class ServerTests(unittest.TestCase):
         response = connection.getresponse()
         self.assertEqual(400, response.status)
 
+    def test_plan_endpoint_rejects_repository_outside_configured_root(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
+            connection = HTTPConnection("127.0.0.1", self.server.server_port)
+            with patch.dict(os.environ, {"STREAMBANK_PATH": root}):
+                connection.request(
+                    "POST",
+                    "/plans",
+                    json.dumps({"repository": outside, "request": "read files"}),
+                    {"Content-Type": "application/json"},
+                )
+                response = connection.getresponse()
+            self.assertEqual(400, response.status)
+
 
 if __name__ == "__main__":
     unittest.main()

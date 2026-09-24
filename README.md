@@ -43,9 +43,17 @@ curl -X POST http://127.0.0.1:8080/plans \
   -d '{"repository":"~/projects/StreamBank","request":"Plan a daily transfer limit"}'
 ```
 
-The API accepts repository paths for the local machine only and never writes
-to the repository. Patch execution and test execution are intentionally not
-implemented in this phase.
+Set `STREAMBANK_PATH` before starting the API to restrict reads to the
+StreamBank checkout:
+
+```bash
+export STREAMBANK_PATH=~/projects/StreamBank
+python3 -m app.server
+```
+
+The API accepts only repository paths under that configured root and never
+writes to the repository. Patch execution and test execution are intentionally
+not implemented in this phase.
 
 Each API plan receives a UUID `runId` and UTC `createdAt` timestamp. The
 result is persisted under `plans/` in the platform repository (or `PLANS_DIR`)
