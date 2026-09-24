@@ -32,3 +32,17 @@ python3 -m app.plan \
 
 Ollama must be available at `http://127.0.0.1:11434`. If it is unavailable or
 returns invalid JSON, the application produces a deterministic fallback plan.
+
+The same read-only flow is available as a small standard-library HTTP API:
+
+```bash
+python3 -m app.server
+curl http://127.0.0.1:8080/health
+curl -X POST http://127.0.0.1:8080/plans \
+  -H 'Content-Type: application/json' \
+  -d '{"repository":"~/projects/StreamBank","request":"Plan a daily transfer limit"}'
+```
+
+The API accepts repository paths for the local machine only and never writes
+to the repository. Patch execution and test execution are intentionally not
+implemented in this phase.
