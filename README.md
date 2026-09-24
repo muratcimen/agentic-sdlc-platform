@@ -16,3 +16,19 @@ PRD -> structured plan -> human approval -> sandbox patch -> tests -> diff/revie
 ```
 
 The first scenario is rejecting null, zero and negative account transaction amounts in StreamBank.
+
+## Local plan-only application
+
+The first executable slice only reads StreamBank and produces a JSON plan. It
+does not write repository files, apply patches, or run tests in StreamBank.
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m app.plan \
+  --repository ~/projects/StreamBank \
+  --output plan.json \
+  "Transfer işlemlerinde günlük limit kontrolü eklenmesini planla."
+```
+
+Ollama must be available at `http://127.0.0.1:11434`. If it is unavailable or
+returns invalid JSON, the application produces a deterministic fallback plan.
