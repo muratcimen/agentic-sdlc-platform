@@ -66,3 +66,9 @@ Saved plans can be inspected without accessing StreamBank:
 curl http://127.0.0.1:8080/plans
 curl http://127.0.0.1:8080/plans/<runId>
 ```
+
+Configured project roots can be inspected with:
+
+```bash
+curl http://127.0.0.1:8080/projects
+```

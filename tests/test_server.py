@@ -84,6 +84,21 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(200, response.status)
             self.assertEqual("abc", json.loads(response.read())["runId"])
 
+    def test_projects_lists_configured_roots_without_scanning_contents(self):
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            with patch.dict(
+                os.environ, {"PROJECT_ROOTS": os.pathsep.join([first, second, "/missing"])}
+            ):
+                connection = HTTPConnection("127.0.0.1", self.server.server_port)
+                connection.request("GET", "/projects")
+                response = connection.getresponse()
+                payload = json.loads(response.read())
+
+            self.assertEqual(200, response.status)
+            self.assertEqual(3, len(payload["projects"]))
+            self.assertTrue(payload["projects"][0]["exists"])
+            self.assertFalse(payload["projects"][2]["exists"])
+
     def test_plan_endpoint_rejects_empty_request(self):
         connection = HTTPConnection("127.0.0.1", self.server.server_port)
         connection.request(

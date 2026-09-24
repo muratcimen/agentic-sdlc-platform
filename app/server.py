@@ -31,6 +31,14 @@ class PlanHandler(BaseHTTPRequestHandler):
             return requested
         raise ValueError("repository is outside the configured project roots")
 
+    def _configured_roots(self) -> list[Path]:
+        configured = os.environ.get("PROJECT_ROOTS") or os.environ.get("STREAMBANK_PATH", "")
+        return [
+            Path(value).expanduser().resolve()
+            for value in configured.split(os.pathsep)
+            if value.strip()
+        ]
+
     def _send(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode()
         self.send_response(status)
@@ -48,6 +56,17 @@ class PlanHandler(BaseHTTPRequestHandler):
                 self._send(200, {"status": "ok", "ollama": ollama})
             except OSError as error:
                 self._send(503, {"status": "degraded", "ollama": str(error)})
+            return
+        if self.path == "/projects":
+            projects = [
+                {
+                    "name": root.name,
+                    "path": str(root),
+                    "exists": root.is_dir(),
+                }
+                for root in self._configured_roots()
+            ]
+            self._send(200, {"projects": projects})
             return
         if self.path == "/plans":
             plans = []
