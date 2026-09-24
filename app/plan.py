@@ -27,6 +27,14 @@ def discover_files(repository: Path, request: str, limit: int = 12) -> list[File
         term.lower()
         for term in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]{2,}", request)
     }
+    expansions = {
+        "transfer": {"account", "deposit", "withdraw", "transaction"},
+        "limit": {"account", "transaction", "service", "controller"},
+        "günlük": {"account", "transaction", "service"},
+        "limitini": {"account", "transaction", "service"},
+    }
+    for term in tuple(terms):
+        terms.update(expansions.get(term, set()))
     candidates: list[FileCandidate] = []
     for path in repository.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
@@ -95,12 +103,20 @@ def create_plan(
     if not repository.is_dir():
         raise ValueError(f"Repository does not exist: {repository}")
     files = discover_files(repository, request)
+    inventory = sorted(
+        path.relative_to(repository).as_posix()
+        for path in repository.rglob("*")
+        if path.is_file()
+        and path.suffix.lower() in TEXT_SUFFIXES
+        and not any(part in IGNORED_PARTS for part in path.parts)
+    )
     context = "\n".join(
         f"- {candidate.path} (matches: {', '.join(candidate.matches)})"
         for candidate in files
     ) or "- No matching text files were found."
+    inventory_context = "\n".join(f"- {path}" for path in inventory[:80])
     prompt = f"""You are a read-only software planning assistant.
-Do not propose edits outside the supplied repository context.
+Do not invent file paths. Every filesToInspect path must exist in the repository inventory.
 Return valid JSON with keys: summary, missingInformation, acceptanceCriteria,
 filesToInspect, proposedChanges, tests, humanApprovalRequired.
 The human must approve any future change.
@@ -110,9 +126,19 @@ Request:
 
 Repository candidates:
 {context}
+
+Repository inventory:
+{inventory_context}
 """
     try:
         plan = json.loads(_model_request(prompt, model, endpoint))
+        requested_paths = plan.get("filesToInspect", [])
+        valid_paths = set(inventory)
+        if (
+            not isinstance(requested_paths, list)
+            or not all(isinstance(path, str) and path in valid_paths for path in requested_paths)
+        ):
+            raise ValueError("Model returned paths outside the repository inventory")
         plan["request"] = request
         plan["mode"] = "plan-only"
         plan["humanApprovalRequired"] = True
