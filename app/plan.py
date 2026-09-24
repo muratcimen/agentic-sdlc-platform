@@ -13,6 +13,14 @@ from typing import Any
 DEFAULT_MODEL = "qwen2.5-coder:1.5b"
 IGNORED_PARTS = {".git", ".idea", "target", "__pycache__", ".mvn"}
 TEXT_SUFFIXES = {".java", ".md", ".sql", ".xml", ".yml", ".yaml", ".properties"}
+REQUIRED_PLAN_KEYS = {
+    "summary",
+    "missingInformation",
+    "acceptanceCriteria",
+    "filesToInspect",
+    "proposedChanges",
+    "humanApprovalRequired",
+}
 
 
 @dataclass(frozen=True)
@@ -94,6 +102,19 @@ def _fallback_plan(request: str, files: list[FileCandidate]) -> dict[str, Any]:
     }
 
 
+def _validate_model_plan(plan: Any, inventory: set[str]) -> dict[str, Any]:
+    if not isinstance(plan, dict) or not REQUIRED_PLAN_KEYS.issubset(plan):
+        raise ValueError("Model returned an incomplete plan")
+    if plan["humanApprovalRequired"] is not True:
+        raise ValueError("Model plan must require human approval")
+    paths = plan["filesToInspect"]
+    if not isinstance(paths, list) or not all(
+        isinstance(path, str) and path in inventory for path in paths
+    ):
+        raise ValueError("Model returned paths outside the repository inventory")
+    return plan
+
+
 def create_plan(
     request: str,
     repository: Path,
@@ -132,13 +153,7 @@ Repository inventory:
 """
     try:
         plan = json.loads(_model_request(prompt, model, endpoint))
-        requested_paths = plan.get("filesToInspect", [])
-        valid_paths = set(inventory)
-        if (
-            not isinstance(requested_paths, list)
-            or not all(isinstance(path, str) and path in valid_paths for path in requested_paths)
-        ):
-            raise ValueError("Model returned paths outside the repository inventory")
+        plan = _validate_model_plan(plan, set(inventory))
         plan["request"] = request
         plan["mode"] = "plan-only"
         plan["humanApprovalRequired"] = True

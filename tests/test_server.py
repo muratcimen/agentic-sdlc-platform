@@ -53,6 +53,17 @@ class ServerTests(unittest.TestCase):
         connection.request("GET", "/unknown")
         self.assertEqual(404, connection.getresponse().status)
 
+    def test_plan_endpoint_rejects_empty_request(self):
+        connection = HTTPConnection("127.0.0.1", self.server.server_port)
+        connection.request(
+            "POST",
+            "/plans",
+            json.dumps({"repository": "/tmp", "request": " "}),
+            {"Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        self.assertEqual(400, response.status)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,8 @@ from urllib.request import urlopen
 
 from .plan import create_plan
 
+MAX_REQUEST_BYTES = 64 * 1024
+
 
 class PlanHandler(BaseHTTPRequestHandler):
     def _send(self, status: int, payload: dict[str, Any]) -> None:
@@ -37,9 +39,13 @@ class PlanHandler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if length < 1 or length > MAX_REQUEST_BYTES:
+                raise ValueError("Request body must be between 1 and 65536 bytes")
             payload = json.loads(self.rfile.read(length))
             request = payload["request"]
             repository = Path(payload["repository"]).expanduser().resolve()
+            if not isinstance(request, str) or not request.strip():
+                raise ValueError("request must be a non-empty string")
             model = payload.get("model", "qwen2.5-coder:1.5b")
             endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
             plan = create_plan(request, repository, model, endpoint)
