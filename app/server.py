@@ -19,15 +19,17 @@ class PlanHandler(BaseHTTPRequestHandler):
         return Path(os.environ.get("PLANS_DIR", "plans"))
 
     def _allowed_repository(self, requested: Path) -> Path:
-        allowed = os.environ.get("STREAMBANK_PATH")
-        if not allowed:
+        configured = os.environ.get("PROJECT_ROOTS") or os.environ.get("STREAMBANK_PATH")
+        if not configured:
             return requested
-        root = Path(allowed).expanduser().resolve()
-        try:
-            requested.relative_to(root)
-        except ValueError as error:
-            raise ValueError("repository is outside the configured StreamBank path") from error
-        return requested
+        roots = [
+            Path(value).expanduser().resolve()
+            for value in configured.split(os.pathsep)
+            if value.strip()
+        ]
+        if any(requested == root or root in requested.parents for root in roots):
+            return requested
+        raise ValueError("repository is outside the configured project roots")
 
     def _send(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode()

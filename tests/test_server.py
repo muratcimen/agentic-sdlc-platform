@@ -98,7 +98,7 @@ class ServerTests(unittest.TestCase):
     def test_plan_endpoint_rejects_repository_outside_configured_root(self):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
             connection = HTTPConnection("127.0.0.1", self.server.server_port)
-            with patch.dict(os.environ, {"STREAMBANK_PATH": root}):
+            with patch.dict(os.environ, {"PROJECT_ROOTS": root}):
                 connection.request(
                     "POST",
                     "/plans",
@@ -107,6 +107,27 @@ class ServerTests(unittest.TestCase):
                 )
                 response = connection.getresponse()
             self.assertEqual(400, response.status)
+
+    def test_plan_endpoint_accepts_repository_under_any_configured_root(self):
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            repository = Path(second) / "project"
+            repository.mkdir()
+            connection = HTTPConnection("127.0.0.1", self.server.server_port)
+            with patch.dict(os.environ, {"PROJECT_ROOTS": os.pathsep.join([first, second])}), patch(
+                "app.server.create_plan",
+                return_value={
+                    "mode": "plan-only",
+                    "humanApprovalRequired": True,
+                },
+            ):
+                connection.request(
+                    "POST",
+                    "/plans",
+                    json.dumps({"repository": str(repository), "request": "read files"}),
+                    {"Content-Type": "application/json"},
+                )
+                response = connection.getresponse()
+            self.assertEqual(200, response.status)
 
 
 if __name__ == "__main__":
