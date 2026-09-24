@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from .evidence import analyze_repository
 
 
 DEFAULT_MODEL = "qwen2.5-coder:1.5b"
@@ -22,6 +23,19 @@ REQUIRED_PLAN_KEYS = {
     "filesToInspect",
     "proposedChanges",
     "humanApprovalRequired",
+    "status",
+    "currentFlow",
+    "businessRuleContract",
+    "domainDesign",
+    "dataModel",
+    "atomicTransactionFlow",
+    "integrationAndAudit",
+    "failureScenarios",
+    "validation",
+    "releasePlan",
+    "decisionAlternatives",
+    "invariants",
+    "repositoryEvidence",
 }
 
 
@@ -82,7 +96,9 @@ def _model_request(prompt: str, model: str, endpoint: str) -> str:
     return str(body["response"])
 
 
-def _fallback_plan(request: str, files: list[FileCandidate]) -> dict[str, Any]:
+def _fallback_plan(
+    request: str, files: list[FileCandidate], evidence: dict[str, Any] | None = None
+) -> dict[str, Any]:
     return {
         "request": request,
         "summary": "Create a reviewed implementation plan without changing files.",
@@ -101,6 +117,25 @@ def _fallback_plan(request: str, files: list[FileCandidate]) -> dict[str, Any]:
         ],
         "humanApprovalRequired": True,
         "mode": "plan-only",
+        "status": evidence["status"] if evidence else "BLOCKED_BY_REPOSITORY_EVIDENCE",
+        "repositoryEvidence": evidence,
+        "currentFlow": {
+            "status": "unverified",
+            "references": evidence.get("codeReferences", []) if evidence else [],
+        },
+        "businessRuleContract": {"status": "BLOCKED_BY_BUSINESS_DECISION"},
+        "domainDesign": {"status": "unverified"},
+        "dataModel": {
+            "status": "unverified",
+            "references": evidence.get("schemaReferences", []) if evidence else [],
+        },
+        "atomicTransactionFlow": {"status": "unverified"},
+        "integrationAndAudit": {"status": "unverified"},
+        "failureScenarios": {"status": "unverified"},
+        "validation": {"status": "unverified"},
+        "releasePlan": {"status": "unverified"},
+        "decisionAlternatives": [],
+        "invariants": [],
     }
 
 
@@ -126,6 +161,9 @@ def create_plan(
     if not repository.is_dir():
         raise ValueError(f"Repository does not exist: {repository}")
     files = discover_files(repository, request)
+    evidence = analyze_repository(repository, request)
+    if evidence["status"] == "BLOCKED_BY_REPOSITORY_EVIDENCE":
+        return _fallback_plan(request, files, evidence)
     inventory = sorted(
         path.relative_to(repository).as_posix()
         for path in repository.rglob("*")
@@ -141,7 +179,10 @@ def create_plan(
     prompt = f"""You are a read-only software planning assistant.
 Do not invent file paths. Every filesToInspect path must exist in the repository inventory.
 Return valid JSON with keys: summary, missingInformation, acceptanceCriteria,
-filesToInspect, proposedChanges, tests, humanApprovalRequired.
+filesToInspect, proposedChanges, tests, currentFlow, businessRuleContract,
+domainDesign, dataModel, atomicTransactionFlow, integrationAndAudit,
+failureScenarios, validation, releasePlan, decisionAlternatives, invariants,
+status, repositoryEvidence, humanApprovalRequired.
 The human must approve any future change.
 
 Request:
@@ -152,6 +193,9 @@ Repository candidates:
 
 Repository inventory:
 {inventory_context}
+
+Verified repository evidence:
+{json.dumps(evidence, ensure_ascii=False)}
 """
     try:
         plan = json.loads(_model_request(prompt, model, endpoint))
@@ -159,10 +203,12 @@ Repository inventory:
         plan["request"] = request
         plan["mode"] = "plan-only"
         plan["humanApprovalRequired"] = True
+        plan["status"] = evidence["status"]
+        plan["repositoryEvidence"] = evidence
         plan.setdefault("filesToInspect", [asdict(candidate) for candidate in files])
         return plan
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
-        return _fallback_plan(request, files)
+        return _fallback_plan(request, files, evidence)
 
 
 def main() -> None:
