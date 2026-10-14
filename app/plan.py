@@ -3,14 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import uuid
 import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from .evidence import analyze_repository
+from .evidence import analyze_repository, candidate_terms
 
 
 DEFAULT_MODEL = "qwen2.5-coder:1.5b"
@@ -47,18 +46,7 @@ class FileCandidate:
 
 
 def discover_files(repository: Path, request: str, limit: int = 12) -> list[FileCandidate]:
-    terms = {
-        term.lower()
-        for term in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]{2,}", request)
-    }
-    expansions = {
-        "transfer": {"account", "deposit", "withdraw", "transaction"},
-        "limit": {"account", "transaction", "service", "controller"},
-        "günlük": {"account", "transaction", "service"},
-        "limitini": {"account", "transaction", "service"},
-    }
-    for term in tuple(terms):
-        terms.update(expansions.get(term, set()))
+    terms = candidate_terms(request)
     candidates: list[FileCandidate] = []
     for path in repository.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:

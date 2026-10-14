@@ -30,6 +30,12 @@ python3 -m app.plan \
   "Transfer işlemlerinde günlük limit kontrolü eklenmesini planla."
 ```
 
+The plan JSON shape is documented in
+`docs/agent-contracts/plan-output.schema.json`. `tests/test_schema_contract.py`
+keeps that schema aligned with the required plan keys in `app/plan.py`, and
+`app/evidence.py` gates evidence on request terms so requests outside the
+transfer domain can also reach `READY_FOR_REVIEW`.
+
 Ollama must be available at `http://127.0.0.1:11434`. If it is unavailable or
 returns invalid JSON, the application produces a deterministic fallback plan.
 

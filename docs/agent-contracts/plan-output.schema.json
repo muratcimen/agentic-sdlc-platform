@@ -1,74 +1,166 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Agent plan output",
+  "description": "Contract shared by app.plan.create_plan, the deterministic fallback, and the HTTP plan API.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "title",
+    "request",
+    "mode",
+    "summary",
+    "missingInformation",
     "acceptanceCriteria",
-    "domains",
     "filesToInspect",
     "proposedChanges",
-    "riskLevel",
-    "requiresHumanApproval"
+    "humanApprovalRequired",
+    "status",
+    "currentFlow",
+    "businessRuleContract",
+    "domainDesign",
+    "dataModel",
+    "atomicTransactionFlow",
+    "integrationAndAudit",
+    "failureScenarios",
+    "validation",
+    "releasePlan",
+    "decisionAlternatives",
+    "invariants",
+    "repositoryEvidence"
   ],
   "properties": {
-    "title": {
+    "request": {
       "type": "string",
       "minLength": 1
+    },
+    "mode": {
+      "const": "plan-only"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "missingInformation": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "acceptanceCriteria": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "description", "testable"],
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^AC-[0-9]{3}$"
-          },
-          "description": {
+        "oneOf": [
+          {
             "type": "string",
             "minLength": 1
           },
-          "testable": {
-            "type": "boolean"
+          {
+            "type": "object"
           }
-        }
-      },
-      "minItems": 1
-    },
-    "domains": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
+        ]
       },
       "minItems": 1
     },
     "filesToInspect": {
       "type": "array",
       "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "minItems": 1
+        "oneOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "object",
+            "required": ["path", "score", "matches"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "score": {
+                "type": "integer"
+              },
+              "matches": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      }
     },
     "proposedChanges": {
       "type": "array",
       "items": {
-        "type": "string",
-        "minLength": 1
+        "type": "string"
       },
       "minItems": 1
     },
-    "riskLevel": {
-      "type": "string",
-      "enum": ["LOW", "MEDIUM", "HIGH"]
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
-    "requiresHumanApproval": {
+    "humanApprovalRequired": {
       "const": true
+    },
+    "status": {
+      "enum": ["READY_FOR_REVIEW", "BLOCKED_BY_REPOSITORY_EVIDENCE"]
+    },
+    "currentFlow": {
+      "type": "object"
+    },
+    "businessRuleContract": {
+      "type": "object"
+    },
+    "domainDesign": {
+      "type": "object"
+    },
+    "dataModel": {
+      "type": "object"
+    },
+    "atomicTransactionFlow": {
+      "type": "object"
+    },
+    "integrationAndAudit": {
+      "type": "object"
+    },
+    "failureScenarios": {
+      "type": "object"
+    },
+    "validation": {
+      "type": "object"
+    },
+    "releasePlan": {
+      "type": "object"
+    },
+    "decisionAlternatives": {
+      "type": "array"
+    },
+    "invariants": {
+      "type": "array"
+    },
+    "repositoryEvidence": {
+      "type": "object",
+      "required": ["status", "readOnly"],
+      "properties": {
+        "status": {
+          "enum": ["READY_FOR_REVIEW", "BLOCKED_BY_REPOSITORY_EVIDENCE"]
+        },
+        "readOnly": {
+          "const": true
+        }
+      }
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "minLength": 1
     }
   }
 }

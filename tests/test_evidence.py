@@ -43,6 +43,42 @@ class TransferService {
             self.assertEqual("BLOCKED_BY_REPOSITORY_EVIDENCE", report["status"])
             self.assertTrue(report["blockers"])
 
+    def test_non_transfer_request_reaches_ready_for_review(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            (repository / "KycService.java").write_text(
+                "@Service\n"
+                "class KycService {\n"
+                "  @Transactional\n"
+                "  public void verifyCustomer(Long id) {}\n"
+                "}\n"
+            )
+            (repository / "V1__kyc.sql").write_text(
+                "CREATE TABLE kyc_checks (id BIGINT);"
+            )
+
+            report = analyze_repository(repository, "add kyc verification for customers")
+
+            self.assertEqual("READY_FOR_REVIEW", report["status"])
+            self.assertEqual([], report["blockers"])
+            self.assertGreater(report["evidenceSummary"]["domainEvidenceCount"], 0)
+            self.assertTrue(report["readOnly"])
+
+    def test_transfer_request_cannot_pass_the_gate_without_transfer_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            (repository / "AccountService.java").write_text(
+                "class AccountService { void transferLimit() {} }\n"
+            )
+            (repository / "V1__accounts.sql").write_text(
+                "CREATE TABLE accounts (id BIGINT);"
+            )
+
+            report = analyze_repository(repository, "daily transfer limit")
+
+            self.assertEqual("BLOCKED_BY_REPOSITORY_EVIDENCE", report["status"])
+            self.assertTrue(any("domain" in item for item in report["blockers"]))
+
 
 if __name__ == "__main__":
     unittest.main()
