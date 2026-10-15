@@ -8,6 +8,43 @@ from typing import Any
 IGNORED_PARTS = {".git", ".idea", "target", "__pycache__", ".mvn"}
 SOURCE_SUFFIXES = {".java", ".sql", ".xml", ".yml", ".yaml", ".properties"}
 
+# Domain vocabulary shared by discovery, evidence context, and the evidence gate.
+EXPANSIONS = {
+    "transfer": {"account", "deposit", "withdraw", "transaction"},
+    "havale": {"transfer", "transaction", "deposit", "withdraw"},
+    "limit": {"account", "transaction", "service", "controller"},
+    "günlük": {"account", "transaction", "service"},
+    "limitini": {"account", "transaction", "service"},
+}
+TRANSFER_VOCABULARY = {"transfer", "transaction", "deposit", "withdraw", "havale"}
+MIN_TERM_LENGTH = 3
+
+
+def domain_terms(text: str) -> set[str]:
+    """Return request terms, widened with the transfer vocabulary on demand.
+
+    Only the words the caller actually wrote (length >= 3) are used as the
+    evidence gate, so a request without a domain word cannot pass the gate
+    through a generic entity expansion such as "account".
+    """
+    core = {
+        term.lower()
+        for term in re.findall(r"\w+", text.lower())
+        if len(term) >= MIN_TERM_LENGTH
+    }
+    if core & TRANSFER_VOCABULARY:
+        return core | TRANSFER_VOCABULARY
+    return core
+
+
+def candidate_terms(text: str) -> set[str]:
+    """Return domain terms plus known entity expansions for discovery."""
+    terms = domain_terms(text)
+    for term in re.findall(r"\w+", text.lower()):
+        if len(term) >= MIN_TERM_LENGTH:
+            terms.update(EXPANSIONS.get(term, ()))
+    return terms
+
 
 @dataclass(frozen=True)
 class CodeReference:
@@ -113,48 +150,57 @@ def analyze_repository(repository: Path, query: str = "") -> dict[str, Any]:
     code = _java_references(repository)
     schema = _schema_references(repository)
     lower_query = query.lower()
-    query_terms = set(re.findall(r"[A-Za-z0-9_-]+", lower_query))
-    expansions = {
-        "transfer": {"account", "deposit", "withdraw", "transaction"},
-        "limit": {"account", "transaction", "service", "controller"},
-    }
-    for term in tuple(query_terms):
-        query_terms.update(expansions.get(term, set()))
-    transfer_terms = ("transfer", "transaction", "deposit", "withdraw", "limit")
+    context = candidate_terms(lower_query)
+    gate = domain_terms(lower_query)
     relevant_code = [
         asdict(reference)
         for reference in code
         if not lower_query
         or any(
             term in reference.symbol.lower() or term in reference.evidence.lower()
-            for term in query_terms
+            for term in context
         )
     ]
     relevant_schema = [
         asdict(reference)
         for reference in schema
-        if any(term in reference.object_name.lower() or term in reference.evidence.lower()
-               for term in transfer_terms)
+        if not lower_query
+        or any(
+            term in reference.object_name.lower() or term in reference.evidence.lower()
+            for term in context
+        )
     ]
     transactional = [
-        asdict(reference)
-        for reference in code
-        if "@Transactional" in reference.annotations
+        asdict(reference) for reference in code if "@Transactional" in reference.annotations
     ]
-    transfer_evidence = [
-        item for item in relevant_code
-        if any(term in (item["symbol"] + " " + item["evidence"]).lower()
-               for term in ("transfer", "deposit", "withdraw", "transaction"))
+    gate_code = [
+        reference
+        for reference in code
+        if any(
+            term in reference.symbol.lower() or term in reference.evidence.lower()
+            for term in gate
+        )
+    ]
+    gate_schema = [
+        reference
+        for reference in schema
+        if any(
+            term in reference.object_name.lower() or term in reference.evidence.lower()
+            for term in gate
+        )
     ]
     status = "READY_FOR_REVIEW"
     blockers: list[str] = []
-    if not transfer_evidence:
+    if not lower_query:
         status = "BLOCKED_BY_REPOSITORY_EVIDENCE"
-        blockers.append("No transfer or transaction code reference was found.")
-    if not relevant_schema:
-        blockers.append("No transfer-related SQL table, index, or constraint was found.")
-        if status == "READY_FOR_REVIEW":
+        blockers.append("The request is empty.")
+    else:
+        if not gate_code:
             status = "BLOCKED_BY_REPOSITORY_EVIDENCE"
+            blockers.append("No code reference matched the request domain.")
+        if not gate_schema:
+            status = "BLOCKED_BY_REPOSITORY_EVIDENCE"
+            blockers.append("No SQL table, index, or constraint matched the request domain.")
     return {
         "status": status,
         "repository": str(repository),
@@ -166,7 +212,7 @@ def analyze_repository(repository: Path, query: str = "") -> dict[str, Any]:
             "javaReferenceCount": len(relevant_code),
             "transactionalBoundaryCount": len(transactional),
             "schemaReferenceCount": len(relevant_schema),
-            "transferEvidenceCount": len(transfer_evidence),
+            "domainEvidenceCount": len(gate_code) + len(gate_schema),
         },
         "blockers": blockers,
         "readOnly": True,
